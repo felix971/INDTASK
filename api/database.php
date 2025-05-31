@@ -1,41 +1,42 @@
 <?php
-class Database {
-    private $host;
-    private $username;
-    private $password;
-    private $database;
-    private $connection;
+class SimpleDatabase {
+    private $db;
     
     public function __construct() {
-        // 使用环境变量或直接配置
-        $this->host = $_ENV['DB_HOST'] ?? 'localhost';
-        $this->username = $_ENV['DB_USERNAME'] ?? 'root';
-        $this->password = $_ENV['DB_PASSWORD'] ?? '';
-        $this->database = $_ENV['DB_NAME'] ?? 'strata_management';
+        // 使用SQLite，无需外部数据库
+        $this->db = new PDO('sqlite:/tmp/strata.db');
+        $this->initTables();
     }
     
-    public function connect() {
-        try {
-            $this->connection = new PDO(
-                "mysql:host={$this->host};dbname={$this->database}",
-                $this->username,
-                $this->password,
-                [
-                    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-                    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
-                ]
-            );
-            return $this->connection;
-        } catch(PDOException $e) {
-            die("数据库连接失败: " . $e->getMessage());
-        }
+    private function initTables() {
+        $this->db->exec("
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY,
+                username TEXT UNIQUE,
+                password TEXT,
+                role TEXT
+            )
+        ");
+        
+        // 插入测试用户
+        $stmt = $this->db->prepare("INSERT OR IGNORE INTO users (username, password, role) VALUES (?, ?, ?)");
+        $stmt->execute(['admin', password_hash('admin123', PASSWORD_DEFAULT), 'admin']);
+        $stmt->execute(['owner1', password_hash('owner123', PASSWORD_DEFAULT), 'owner']);
     }
     
-    public function getConnection() {
-        if (!$this->connection) {
-            $this->connect();
+    public function verifyUser($username, $password) {
+        $stmt = $this->db->prepare("SELECT * FROM users WHERE username = ?");
+        $stmt->execute([$username]);
+        $user = $stmt->fetch();
+        
+        if ($user && password_verify($password, $user['password'])) {
+            return $user;
         }
-        return $this->connection;
+        return false;
     }
 }
+
+// 测试数据库
+$db = new SimpleDatabase();
+echo "数据库初始化成功！";
 ?>
